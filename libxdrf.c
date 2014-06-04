@@ -507,7 +507,7 @@ int xdrclose(XDR *xdrs) {
 	    
 	    xdr_destroy(xdrs);
 	    fclose(xdrfiles[xdrid]);
-	    free(xdridptr[xdrid]);
+	    free(xdridptr[xdrid]); /* Avoid memory leak by freeing here */
 	    xdridptr[xdrid] = NULL;
 	    return 1;
 	}

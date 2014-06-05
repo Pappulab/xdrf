@@ -145,5 +145,9 @@ int main() {
 	}
     }
     fprintf(stderr,"\nmaxdiff  = %f\n", maxdiff);    
+
+    free(coord);
+    free(coord2);
+    free(line);
     return 0;
 }

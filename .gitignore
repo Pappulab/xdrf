@@ -23,3 +23,5 @@
 *.hex
 
 for_compression/
+
+test.xdr

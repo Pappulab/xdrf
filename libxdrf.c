@@ -149,9 +149,10 @@
 */	
 
 
+
 #include <limits.h>
-#include <malloc.h>
 #include <math.h>
+#include <string.h>
 #include <rpc/rpc.h>
 #include <rpc/xdr.h>
 #include <stdio.h>

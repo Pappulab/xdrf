@@ -7,12 +7,20 @@
 ARCH	= linux
 
 # Set FORTRAN compiler and flags for ARCH
-F77     = ifort
+
+# if intel compilers are available use gfortran and gcc
+F77     = gfortran
+CC      = gcc
+
+#F77     = ifort
+
 FFLAGS  = -O3 
+CFLAGS 	= -O -D$(ARCH)
 
 # Set C compiler and flags for ARCH
-CC      = icc
-CFLAGS 	= -O -D$(ARCH)
+#CC      = icc
+
+
 
 # Set HASRANLIB to t if your system needs ranlib
 HASRANLIB = f	
@@ -23,10 +31,27 @@ HASRANLIB = f
 LIBS = 
 
 SHELL	= /bin/sh
+
+
+## RMCMD definition set ##
+
 # set RM to rm -f if you want to remove the intermediate C source file
 # generated for the FORTRAN interface library
 #RMCMD 	= rm -f
-RMCMD	= /bin/true
+
+
+# if we need to specify full paths we have to use different paths
+# for linux or MacOS
+
+# macOS
+#RMCMD	= /usr/bin/true
+
+# linux
+#RMCMD	= /bin/true
+
+# the definition below SHOULD work on both... hopefully!
+RMCMD	= true
+
 M4 	= m4
 M4FILE	= conf/$(ARCH).m4
 

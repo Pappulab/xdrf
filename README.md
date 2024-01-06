@@ -42,6 +42,12 @@ If you run into any problems please raise a GitHub issue, and if I (Alex) don't 
 
 ## Changelog
 
+#### V 1.4 (Jan 2024)
+* Commented out the stub definition of `xdrstdio_create()` as this is now generally provided by `/usr/include/rpc/xdr.h` (which itself is part of the `libntirpc` package, to install with headers on Ubuntu run.
+
+		sudo apt install libntirpc-dev
+	
+
 #### V 1.3
 * Thanks to @sodiumnitrate for identifying issue(s) with the current implementation, which hasn't been update in ~8 years!
 

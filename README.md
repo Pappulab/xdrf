@@ -1,6 +1,8 @@
 # libxdrf
 
-A portable C/Fortran library for reading and writing XDR (External Data Representation) data, with built-in lossy compression for 3D coordinates. Originally developed for the EUROPORT project by Frans van Hoesel, this version is maintained with bug fixes and modern compiler support.
+###### Current version 1.4 (April 2026)
+
+A portable C/C++/Fortran library for reading and writing XDR (External Data Representation) data, with built-in lossy compression for 3D coordinates. Originally developed for the EUROPORT project by [Frans van Hoesel](https://site.acornatom.nl/atom_handleidingen/pcharme/fvh/frans.html), this version is maintained with bug fixes and modern compiler support.
 
 ## Overview
 
@@ -9,12 +11,23 @@ A portable C/Fortran library for reading and writing XDR (External Data Represen
 1. **Portability** — Binary data written on one architecture (e.g. big-endian SPARC) can be read on another (e.g. little-endian x86) using the XDR standard.
 2. **Compression** — The `xdr3dfcoord` routine compresses 3D floating-point coordinates to ~30% of their uncompressed binary size, exploiting spatial locality in molecular data.
 
-The library provides both a C API (three functions) and a Fortran API (via m4-generated wrappers). It is commonly used as a build dependency for [CAMPARI](http://campari.sourceforge.net/).
+The library provides three interfaces for the same underlying functionality:
+
+| Interface | Header | Description |
+|---|---|---|
+| **C** | `xdrf.h` | Core API — three functions (`xdropen`, `xdrclose`, `xdr3dfcoord`) plus standard XDR primitives |
+| **C++** | `xdrf.hpp` | Header-only RAII wrapper (`xdrf::XdrFile`) around the C API with typed methods and exception handling |
+| **Fortran** | *(via m4 wrappers)* | Fortran-callable wrappers (`xdrfopen`, `xdrfint`, `xdrf3dfcoord`, etc.) generated from `libxdrf.m4` |
+
+All three interfaces read and write the same binary XDR format and can interoperate — a file written with the C++ API can be read from Fortran and vice versa. The C library (`libxdrf.a`) is the common dependency for all three.
+
+The library is commonly used as a build dependency for [CAMPARI](http://campari.sourceforge.net/).
 
 ## Requirements
 
 - **C compiler**: `gcc` or `clang`
-- **Fortran compiler** (optional, for Fortran tests): `gfortran`
+- **C++ compiler** (optional, for C++ interface): `g++` or `clang++` with C++17 support
+- **Fortran compiler** (optional, for Fortran interface): `gfortran`
 - **RPC/XDR headers**:
   - **macOS**: Included with Xcode Command Line Tools (no extra packages needed).
   - **Linux (Ubuntu/Debian)**: Install `libtirpc-dev`:
@@ -36,16 +49,18 @@ make
 
 This produces:
 
-- `libxdrf.a` — the static library
-- `ctest` — C test program
-- `ftest` — Fortran test program
+- `libxdrf.a` — the static library (used by all three interfaces)
+- `ctest` — C smoke test
+- `ftest` — Fortran smoke test
+- `cxxtest` — C++ smoke test
 
 ### Compiler options
 
-To use different compilers (e.g. Intel), edit the `CC` and `F77` variables in the `Makefile`:
+To use different compilers (e.g. Intel), edit the `CC`, `CXX`, and `F77` variables in the `Makefile`:
 
 ```makefile
 CC  = icc
+CXX = icpc
 F77 = ifort
 ```
 
@@ -107,25 +122,26 @@ For most modern systems, either `linux` or `darwin` is the correct choice and is
 ### Quick smoke tests
 
 ```bash
-./ctest    # Should print "maxdiff = 0.000000"
-./ftest    # No output means success
+./ctest      # Should print "maxdiff = 0.000000"
+./ftest      # No output means success
+./cxxtest    # Should print "maxdiff = 0.000000"
 ```
 
-`ctest` reads `test.gmx`, compresses it to `test.xdr`, decompresses to `test.out`, and verifies the round-trip produces identical coordinates.
+`ctest` and `cxxtest` read `test.gmx`, compress it to XDR, decompress, and verify the round-trip. `cxxtest` does the same thing as `ctest` but uses the C++ `xdrf::XdrFile` API.
 
 ### Full test suite
 
-The `test/` directory contains a comprehensive test suite covering both the C and Fortran APIs:
+The `test/` directory contains a comprehensive test suite covering the C, C++, and Fortran APIs:
 
 ```bash
 make -C test    # or: cd test && make test
 ```
 
-This runs 29 C tests and 15 Fortran tests covering XDR primitive round-trips (int, float, double, short, char, string, bool), `xdr3dfcoord` at various sizes and coordinate patterns, append mode, multi-file I/O, setpos/getpos, multi-frame trajectories, and compression ratio verification. See [test/README.md](test/README.md) for details.
+This runs 29 C tests, 24 C++ tests, and 15 Fortran tests covering XDR primitive round-trips (int, float, double, short, char, string, bool), `xdr3dfcoord` at various sizes and coordinate patterns, RAII and move semantics (C++), exception handling (C++), append mode, multi-file I/O, setpos/getpos, multi-frame trajectories, and compression ratio verification. See [test/README.md](test/README.md) for details.
 
 ## C API
 
-Include `xdrf.h` and link against `libxdrf.a -lm`.
+The C interface is the core of the library. Include `xdrf.h` and link against `libxdrf.a -lm`.
 
 ### Functions
 
@@ -188,9 +204,109 @@ Compile with:
 gcc -o myprogram myprogram.c libxdrf.a -lm
 ```
 
+## C++ API
+
+The C++ interface is a header-only wrapper (`xdrf.hpp`) around the C API. It provides an `xdrf::XdrFile` class with RAII resource management, typed read/write methods, move semantics, and exception-based error handling. It requires C++17.
+
+The C++ API uses `libxdrf.a` internally — `xdrf.hpp` includes `xdrf.h` via `extern "C"`, so you link against the same library.
+
+### Class: `xdrf::XdrFile`
+
+```cpp
+#include "xdrf.hpp"
+
+// Construction opens the file; destruction closes it.
+// Throws std::runtime_error if the file cannot be opened.
+xdrf::XdrFile file("data.xdr", "w");  // "w", "r", or "a"
+
+// Explicit close (optional — destructor handles it).
+file.close();
+
+// Query state.
+file.is_open();   // bool
+file.id();        // int xdrid handle
+file.xdr();       // XDR* for advanced/direct C API use
+```
+
+### Primitive read/write methods
+
+| Write | Read | Type |
+|---|---|---|
+| `write_int(int)` | `read_int()` → `int` | integer |
+| `write_float(float)` | `read_float()` → `float` | float |
+| `write_double(double)` | `read_double()` → `double` | double |
+| `write_short(short)` | `read_short()` → `short` | short |
+| `write_char(char)` | `read_char()` → `char` | character |
+| `write_bool(bool)` | `read_bool()` → `bool` | boolean |
+| `write_string(const std::string&)` | `read_string()` → `std::string` | string |
+
+All methods throw `std::runtime_error` on failure.
+
+### 3D coordinate methods
+
+```cpp
+// Write from std::vector<float> (size must be a multiple of 3)
+file.write_3dfcoord(coords_vec, precision);
+
+// Write from raw pointer
+file.write_3dfcoord(float_ptr, num_atoms, precision);
+
+// Read into a new vector (returns {coords, precision})
+auto [coords, prec] = file.read_3dfcoord();
+
+// Read into a caller-provided buffer
+file.read_3dfcoord(float_ptr, num_atoms, precision);
+```
+
+### Position methods
+
+```cpp
+unsigned int pos = file.getpos();   // current stream position
+file.setpos(pos);                   // seek to position
+```
+
+### Example (C++)
+
+```cpp
+#include "xdrf.hpp"
+#include <vector>
+
+int main() {
+    int num_atoms = 100;
+    float precision = 1000.0f;
+    std::vector<float> coords(num_atoms * 3);
+
+    // ... fill coords ...
+
+    // Write (file closes automatically at end of scope)
+    {
+        xdrf::XdrFile out("trajectory.xdr", "w");
+        out.write_int(num_atoms);
+        out.write_3dfcoord(coords, precision);
+    }
+
+    // Read
+    {
+        xdrf::XdrFile in("trajectory.xdr", "r");
+        int n = in.read_int();
+        auto [result, prec] = in.read_3dfcoord();
+    }
+
+    return 0;
+}
+```
+
+Compile with:
+
+```bash
+g++ -std=c++17 -o myprogram myprogram.cpp libxdrf.a -lm
+```
+
 ## Fortran API
 
-The Fortran interface wraps the C functions, adding an `xdrf` prefix and a `ret` return-value argument. All functions pass an integer `xdrid` (set by `xdrfopen`) to identify the open file.
+The Fortran interface wraps the C functions via m4-generated wrappers in `libxdrf.a`. Each wrapper adds an `xdrf` prefix and a `ret` return-value argument. The wrappers handle Fortran-to-C string conversion and name mangling automatically (configured per architecture in `conf/*.m4`).
+
+All functions pass an integer `xdrid` (set by `xdrfopen`) to identify the open file.
 
 | Routine | Description |
 |---|---|
@@ -217,13 +333,15 @@ After building `libxdrf.a`, point your CAMPARI build to this directory so the li
 ```
 libxdrf.m4    — Main library source (m4 template)
 xdrf.h        — C header
+xdrf.hpp      — C++ header-only wrapper (requires C++17)
 ftocstr.c     — Fortran-to-C string helpers
 ctest.c       — C smoke test (3dfcoord round-trip)
+cxxtest.cpp   — C++ smoke test (same round-trip via XdrFile)
 ftest.f       — Fortran smoke test
 test.gmx      — Test coordinate data
 Makefile      — Build script (auto-detects macOS/Linux)
 conf/         — m4 architecture configs (linux.m4, darwin.m4, ...)
-test/         — Comprehensive test suite (C and Fortran)
+test/         — Comprehensive test suite (C, C++, and Fortran)
 Intro.txt     — Background on the compression algorithm
 ```
 
@@ -249,7 +367,8 @@ MIT License. See [LICENSE](LICENSE).
 * Fixed `MAXABS` implicit int-to-float conversion warning.
 * Added `conf/darwin.m4` for macOS (x86\_64 and arm64).
 * Added auto-detection of macOS vs Linux in `Makefile` (via `uname -s`).
-* Added comprehensive test suite in `test/` with 29 C tests and 15 Fortran tests covering all API functions.
+* Added comprehensive test suite in `test/` with 29 C tests, 24 C++ tests, and 15 Fortran tests covering all API functions.
+* Added C++ header-only wrapper (`xdrf.hpp`) providing RAII-based `xdrf::XdrFile` class with typed methods, move semantics, and exception handling.
 * Updated all 66 architecture config files in `conf/` to use ANSI-compatible macros:
   - Groups 1–4 (61 files): Moved `char *` / `int` types from `STRING_ARG_DECL` into `STRING_ARG` inline.
   - Group 5 (`CRAY.m4`, `CRAY2.m4`): Moved `_fcd` type into `STRING_ARG`.

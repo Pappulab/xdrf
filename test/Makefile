@@ -6,6 +6,7 @@ LIBXDRF  = $(PARENT)/libxdrf.a
 
 # Inherit compiler settings from parent
 CC       = gcc
+CXX      = g++
 F77      = gfortran
 
 UNAME_S := $(shell uname -s)
@@ -16,10 +17,11 @@ ARCH     = linux
 endif
 
 CFLAGS   = -O -D$(ARCH) -I$(PARENT)
+CXXFLAGS = -O -std=c++17 -D$(ARCH) -I$(PARENT)
 FFLAGS   = -O3
 LIBS     = -lm
 
-TESTS    = test_xdrf test_fortran
+TESTS    = test_xdrf test_fortran test_xdrf_cpp
 
 .PHONY: all clean test
 
@@ -35,6 +37,9 @@ test_xdrf: test_xdrf.c $(LIBXDRF)
 test_fortran: test_fortran.f $(LIBXDRF)
 	$(F77) -o $@ $(FFLAGS) $< $(LIBXDRF) $(LIBS)
 
+test_xdrf_cpp: test_xdrf_cpp.cpp $(LIBXDRF)
+	$(CXX) -o $@ $(CXXFLAGS) $< $(LIBXDRF) $(LIBS)
+
 test: $(TESTS)
 	@echo ""
 	@echo "==============================="
@@ -46,6 +51,11 @@ test: $(TESTS)
 	@echo "  Running Fortran tests"
 	@echo "==============================="
 	./test_fortran
+	@echo ""
+	@echo "==============================="
+	@echo "  Running C++ tests"
+	@echo "==============================="
+	./test_xdrf_cpp
 	@echo ""
 	@echo "==============================="
 	@echo "  Cleaning up temp files"

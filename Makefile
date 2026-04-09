@@ -17,11 +17,13 @@ endif
 # if intel compilers are available use gfortran and gcc
 F77     = gfortran
 CC      = gcc
+CXX     = g++
 
 #F77     = ifort
 
 FFLAGS  = -O3 
 CFLAGS 	= -O -D$(ARCH)
+CXXFLAGS = -O -std=c++17 -D$(ARCH)
 
 # Set C compiler and flags for ARCH
 #CC      = icc
@@ -64,7 +66,7 @@ M4FILE	= conf/$(ARCH).m4
 LFOBS 	= libxdrf.o 
 LOBS	= xdr3dfcoord.o
 
-default: libxdrf.a ctest ftest
+default: libxdrf.a ctest ftest cxxtest
 
 libxdrf.a:  $(LFOBS) ftocstr.o
 	ar cr libxdrf.a $?
@@ -75,8 +77,12 @@ ctest:	ctest.c libxdrf.a
 
 ftest:	ftest.f libxdrf.a
 	$(F77) -o ftest $(FFLAGS) ftest.f libxdrf.a $(LIBS)
+
+cxxtest: cxxtest.cpp libxdrf.a xdrf.hpp
+	$(CXX) -o cxxtest $(CXXFLAGS) cxxtest.cpp libxdrf.a -lm $(LIBS)
+
 clean:
-	rm -f $(LFOBS) $(LOBS) ftocstr.o libxdrf.a ftest ctest
+	rm -f $(LFOBS) $(LOBS) ftocstr.o libxdrf.a ftest ctest cxxtest
 
 tidy:
 	rm -f $(LOBS) $(LFOBS)

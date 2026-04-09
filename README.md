@@ -104,12 +104,24 @@ For most modern systems, either `linux` or `darwin` is the correct choice and is
 
 ## Testing
 
+### Quick smoke tests
+
 ```bash
 ./ctest    # Should print "maxdiff = 0.000000"
 ./ftest    # No output means success
 ```
 
 `ctest` reads `test.gmx`, compresses it to `test.xdr`, decompresses to `test.out`, and verifies the round-trip produces identical coordinates.
+
+### Full test suite
+
+The `test/` directory contains a comprehensive test suite covering both the C and Fortran APIs:
+
+```bash
+make -C test    # or: cd test && make test
+```
+
+This runs 29 C tests and 15 Fortran tests covering XDR primitive round-trips (int, float, double, short, char, string, bool), `xdr3dfcoord` at various sizes and coordinate patterns, append mode, multi-file I/O, setpos/getpos, multi-frame trajectories, and compression ratio verification. See [test/README.md](test/README.md) for details.
 
 ## C API
 
@@ -206,11 +218,12 @@ After building `libxdrf.a`, point your CAMPARI build to this directory so the li
 libxdrf.m4    — Main library source (m4 template)
 xdrf.h        — C header
 ftocstr.c     — Fortran-to-C string helpers
-ctest.c       — C test program
-ftest.f       — Fortran test program
+ctest.c       — C smoke test (3dfcoord round-trip)
+ftest.f       — Fortran smoke test
 test.gmx      — Test coordinate data
 Makefile      — Build script (auto-detects macOS/Linux)
 conf/         — m4 architecture configs (linux.m4, darwin.m4, ...)
+test/         — Comprehensive test suite (C and Fortran)
 Intro.txt     — Background on the compression algorithm
 ```
 
@@ -236,6 +249,7 @@ MIT License. See [LICENSE](LICENSE).
 * Fixed `MAXABS` implicit int-to-float conversion warning.
 * Added `conf/darwin.m4` for macOS (x86\_64 and arm64).
 * Added auto-detection of macOS vs Linux in `Makefile` (via `uname -s`).
+* Added comprehensive test suite in `test/` with 29 C tests and 15 Fortran tests covering all API functions.
 * Updated all 66 architecture config files in `conf/` to use ANSI-compatible macros:
   - Groups 1–4 (61 files): Moved `char *` / `int` types from `STRING_ARG_DECL` into `STRING_ARG` inline.
   - Group 5 (`CRAY.m4`, `CRAY2.m4`): Moved `_fcd` type into `STRING_ARG`.

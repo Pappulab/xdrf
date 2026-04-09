@@ -214,6 +214,10 @@ conf/         — m4 architecture configs (linux.m4, darwin.m4, ...)
 Intro.txt     — Background on the compression algorithm
 ```
 
+## Related
+
+You may also be interested in [xtclib](https://github.com/holehouse-lab/xtclib), a separate, stand-alone Python compatible, C/Cython implementation which is useful as a lightweight plug-n-play for Python-centric XTC manipulation, especially in the context of trajectory-related things.
+
 ## Issues
 
 If you run into problems, please open a GitHub issue. If you don't get a response within a week, email Alex at alex.holehouse@wustl.edu.

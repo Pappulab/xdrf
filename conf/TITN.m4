@@ -11,8 +11,8 @@ define(`FUNCTION',`translit($1,abcdefghijklmnopqrstuvwxyz,ABCDEFGHIJKLMNOPQRSTUV
 divert(0)
 typedef struct { char *ptr; int length; } FSD;
 divert(-1)
-define(`STRING_ARG',`$1_fsd')
-define(`STRING_ARG_DECL',`FSD * $1_fsd')
+define(`STRING_ARG',`FSD *$1_fsd')
+define(`STRING_ARG_DECL',`')
 define(`STRING_LEN',`($1_fsd)->length')
 define(`STRING_PTR',`($1_fsd)->ptr')
 define(`ARGS',`($1)')

@@ -1,9 +1,6 @@
 
 
-int ftocstr(ds, dl, ss, sl)
-    char *ds, *ss;      /* dst, src ptrs */
-    int dl;             /* dst max len */
-    int sl;             /* src len */
+int ftocstr(char *ds, int dl, char *ss, int sl)
 {
     char *p;
 
@@ -20,10 +17,7 @@ int ftocstr(ds, dl, ss, sl)
 }
 
 
-int ctofstr(ds, dl, ss)
-	char *ds;		/* dest space */
-	int dl;			/* max dest length */
-	char *ss;		/* src string (0-term) */
+int ctofstr(char *ds, int dl, char *ss)
 {
     while (dl && *ss) {
 	*ds++ = *ss++;

@@ -183,110 +183,95 @@ static unsigned int cnt;
 typedef void (* FUNCTION(xdrfproc)) (int *, void *, int *);
 
 void
-FUNCTION(xdrfbool) ARGS(`xdrid, pb, ret')
-int *xdrid, *ret;
-int *pb;
+FUNCTION(xdrfbool) ARGS(`int *xdrid, int *pb, int *ret')
 {
 	*ret = xdr_bool(xdridptr[*xdrid], (bool_t *) pb);
 	cnt += sizeof(int);
 }
 
 void
-FUNCTION(xdrfchar) ARGS(`xdrid, cp, ret')
-int *xdrid, *ret;
-char *cp;
+FUNCTION(xdrfchar) ARGS(`int *xdrid, char *cp, int *ret')
 {
 	*ret = xdr_char(xdridptr[*xdrid], cp);
 	cnt += sizeof(char);
 }
 
 void
-FUNCTION(xdrfdouble) ARGS(`xdrid, dp, ret')
-int *xdrid, *ret;
-double *dp;
+FUNCTION(xdrfdouble) ARGS(`int *xdrid, double *dp, int *ret')
 {
 	*ret = xdr_double(xdridptr[*xdrid], dp);
 	cnt += sizeof(double);
 }
 
 void
-FUNCTION(xdrffloat) ARGS(`xdrid, fp, ret')
-int *xdrid, *ret;
-float *fp;
+FUNCTION(xdrffloat) ARGS(`int *xdrid, float *fp, int *ret')
 {
 	*ret = xdr_float(xdridptr[*xdrid], fp);
 	cnt += sizeof(float);
 }
 
 void
-FUNCTION(xdrfint) ARGS(`xdrid, ip, ret')
-int *xdrid, *ret;
-int *ip;
+FUNCTION(xdrfint) ARGS(`int *xdrid, int *ip, int *ret')
 {
 	*ret = xdr_int(xdridptr[*xdrid], ip);
 	cnt += sizeof(int);
 }
 
 void
-FUNCTION(xdrflong) ARGS(`xdrid, lp, ret')
-int *xdrid, *ret;
-long *lp;
+FUNCTION(xdrflong) ARGS(`int *xdrid, long *lp, int *ret')
 {
+#ifdef __APPLE__
+	int tmp = (int)*lp;
+	*ret = xdr_long(xdridptr[*xdrid], &tmp);
+	*lp = tmp;
+#else
 	*ret = xdr_long(xdridptr[*xdrid], lp);
+#endif
 	cnt += sizeof(long);
 }
 
 void
-FUNCTION(xdrfshort) ARGS(`xdrid, sp, ret')
-int *xdrid, *ret;
-short *sp;
+FUNCTION(xdrfshort) ARGS(`int *xdrid, short *sp, int *ret')
 {
 	*ret = xdr_short(xdridptr[*xdrid], sp);
 	cnt += sizeof(sp);
 }
 
 void
-FUNCTION(xdrfuchar) ARGS(`xdrid, ucp, ret')
-int *xdrid, *ret;
-char *ucp;
+FUNCTION(xdrfuchar) ARGS(`int *xdrid, unsigned char *ucp, int *ret')
 {
 	*ret = xdr_u_char(xdridptr[*xdrid], ucp);
 	cnt += sizeof(char);
 }
 
 void
-FUNCTION(xdrfulong) ARGS(`xdrid, ulp, ret')
-int *xdrid, *ret;
-unsigned long *ulp;
+FUNCTION(xdrfulong) ARGS(`int *xdrid, unsigned long *ulp, int *ret')
 {
+#ifdef __APPLE__
+	unsigned int tmp = (unsigned int)*ulp;
+	*ret = xdr_u_long(xdridptr[*xdrid], &tmp);
+	*ulp = tmp;
+#else
 	*ret = xdr_u_long(xdridptr[*xdrid], ulp);
+#endif
 	cnt += sizeof(unsigned long);
 }
 
 void
-FUNCTION(xdrfushort) ARGS(`xdrid, usp, ret')
-int *xdrid, *ret;
-unsigned short *usp;
+FUNCTION(xdrfushort) ARGS(`int *xdrid, unsigned short *usp, int *ret')
 {
 	*ret = xdr_u_short(xdridptr[*xdrid], usp);
 	cnt += sizeof(unsigned short);
 }
 
 void 
-FUNCTION(xdrf3dfcoord) ARGS(`xdrid, fp, size, precision, ret')
-int *xdrid, *ret;
-float *fp;
-int *size;
-float *precision;
+FUNCTION(xdrf3dfcoord) ARGS(`int *xdrid, float *fp, int *size, float *precision, int *ret')
 {
 	*ret = xdr3dfcoord(xdridptr[*xdrid], fp, size, precision);
 }
 
 void
-FUNCTION(xdrfstring) ARGS(`xdrid, STRING_ARG(sp), maxsize, ret')
-int *xdrid, *ret;
-STRING_ARG_DECL(sp);
-int *maxsize;
+FUNCTION(xdrfstring) ARGS(`int *xdrid, STRING_ARG(sp), int *maxsize, int *ret')
 {
 	char *tsp;
 
@@ -307,9 +292,7 @@ int *maxsize;
 }
 
 void
-FUNCTION(xdrfwrapstring) ARGS(`xdrid,  STRING_ARG(sp), ret')
-int *xdrid, *ret;
-STRING_ARG_DECL(sp);
+FUNCTION(xdrfwrapstring) ARGS(`int *xdrid, STRING_ARG(sp), int *ret')
 {
 	char *tsp;
 	int maxsize;
@@ -331,36 +314,26 @@ STRING_ARG_DECL(sp);
 }
 
 void
-FUNCTION(xdrfopaque) ARGS(`xdrid, cp, ccnt, ret')
-int *xdrid, *ret;
-caddr_t *cp;
-int *ccnt;
+FUNCTION(xdrfopaque) ARGS(`int *xdrid, caddr_t *cp, int *ccnt, int *ret')
 {
 	*ret = xdr_opaque(xdridptr[*xdrid], (caddr_t)*cp, (u_int)*ccnt);
 	cnt += *ccnt;
 }
 
 void
-FUNCTION(xdrfsetpos) ARGS(`xdrid, pos, ret')
-int *xdrid, *ret;
-int *pos;
+FUNCTION(xdrfsetpos) ARGS(`int *xdrid, int *pos, int *ret')
 {
 	*ret = xdr_setpos(xdridptr[*xdrid], (u_int) *pos);
 }
 
 void
-FUNCTION(xdrf) ARGS(`xdrid, pos')
-int *xdrid, *pos;
+FUNCTION(xdrf) ARGS(`int *xdrid, int *pos')
 {
 	*pos = xdr_getpos(xdridptr[*xdrid]);
 }
 
 void
-FUNCTION(xdrfvector) ARGS(`xdrid, cp, size, elproc, ret')
-int *xdrid, *ret;
-char *cp;
-int *size;
-FUNCTION(xdrfproc) elproc;
+FUNCTION(xdrfvector) ARGS(`int *xdrid, char *cp, int *size, FUNCTION(xdrfproc) elproc, int *ret')
 {
 	int lcnt;
 	cnt = 0;
@@ -371,20 +344,14 @@ FUNCTION(xdrfproc) elproc;
 
 
 void
-FUNCTION(xdrfclose) ARGS(`xdrid, ret')
-int *xdrid;
-int *ret;
+FUNCTION(xdrfclose) ARGS(`int *xdrid, int *ret')
 {
 	*ret = xdrclose(xdridptr[*xdrid]);
 	cnt = 0;
 }
 
 void
-FUNCTION(xdrfopen) ARGS(`xdrid,  STRING_ARG(fp), STRING_ARG(mode), ret')
-int *xdrid;
-STRING_ARG_DECL(fp);
-STRING_ARG_DECL(mode);
-int *ret;
+FUNCTION(xdrfopen) ARGS(`int *xdrid, STRING_ARG(fp), STRING_ARG(mode), int *ret')
 {
 	char fname[512];
 	char fmode[3];
@@ -411,7 +378,7 @@ int *ret;
  | with some routines to assist in this task (those are marked
  | static and cannot be called from user programs)
 */
-#define MAXABS INT_MAX-2
+#define MAXABS ((double)(INT_MAX-2))
 
 #ifndef MIN
 #define MIN(x,y) ((x) < (y) ? (x):(y))

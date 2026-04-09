@@ -184,110 +184,95 @@ static unsigned int cnt;
 typedef void (* xdrfproc_) (int *, void *, int *);
 
 void
-xdrfbool_ (xdrid, pb, ret)
-int *xdrid, *ret;
-int *pb;
+xdrfbool_ (int *xdrid, int *pb, int *ret)
 {
 	*ret = xdr_bool(xdridptr[*xdrid], (bool_t *) pb);
 	cnt += sizeof(int);
 }
 
 void
-xdrfchar_ (xdrid, cp, ret)
-int *xdrid, *ret;
-char *cp;
+xdrfchar_ (int *xdrid, char *cp, int *ret)
 {
 	*ret = xdr_char(xdridptr[*xdrid], cp);
 	cnt += sizeof(char);
 }
 
 void
-xdrfdouble_ (xdrid, dp, ret)
-int *xdrid, *ret;
-double *dp;
+xdrfdouble_ (int *xdrid, double *dp, int *ret)
 {
 	*ret = xdr_double(xdridptr[*xdrid], dp);
 	cnt += sizeof(double);
 }
 
 void
-xdrffloat_ (xdrid, fp, ret)
-int *xdrid, *ret;
-float *fp;
+xdrffloat_ (int *xdrid, float *fp, int *ret)
 {
 	*ret = xdr_float(xdridptr[*xdrid], fp);
 	cnt += sizeof(float);
 }
 
 void
-xdrfint_ (xdrid, ip, ret)
-int *xdrid, *ret;
-int *ip;
+xdrfint_ (int *xdrid, int *ip, int *ret)
 {
 	*ret = xdr_int(xdridptr[*xdrid], ip);
 	cnt += sizeof(int);
 }
 
 void
-xdrflong_ (xdrid, lp, ret)
-int *xdrid, *ret;
-long *lp;
+xdrflong_ (int *xdrid, long *lp, int *ret)
 {
+#ifdef __APPLE__
+	int tmp = (int)*lp;
+	*ret = xdr_long(xdridptr[*xdrid], &tmp);
+	*lp = tmp;
+#else
 	*ret = xdr_long(xdridptr[*xdrid], lp);
+#endif
 	cnt += sizeof(long);
 }
 
 void
-xdrfshort_ (xdrid, sp, ret)
-int *xdrid, *ret;
-short *sp;
+xdrfshort_ (int *xdrid, short *sp, int *ret)
 {
 	*ret = xdr_short(xdridptr[*xdrid], sp);
 	cnt += sizeof(sp);
 }
 
 void
-xdrfuchar_ (xdrid, ucp, ret)
-int *xdrid, *ret;
-char *ucp;
+xdrfuchar_ (int *xdrid, unsigned char *ucp, int *ret)
 {
 	*ret = xdr_u_char(xdridptr[*xdrid], ucp);
 	cnt += sizeof(char);
 }
 
 void
-xdrfulong_ (xdrid, ulp, ret)
-int *xdrid, *ret;
-unsigned long *ulp;
+xdrfulong_ (int *xdrid, unsigned long *ulp, int *ret)
 {
+#ifdef __APPLE__
+	unsigned int tmp = (unsigned int)*ulp;
+	*ret = xdr_u_long(xdridptr[*xdrid], &tmp);
+	*ulp = tmp;
+#else
 	*ret = xdr_u_long(xdridptr[*xdrid], ulp);
+#endif
 	cnt += sizeof(unsigned long);
 }
 
 void
-xdrfushort_ (xdrid, usp, ret)
-int *xdrid, *ret;
-unsigned short *usp;
+xdrfushort_ (int *xdrid, unsigned short *usp, int *ret)
 {
 	*ret = xdr_u_short(xdridptr[*xdrid], usp);
 	cnt += sizeof(unsigned short);
 }
 
 void 
-xdrf3dfcoord_ (xdrid, fp, size, precision, ret)
-int *xdrid, *ret;
-float *fp;
-int *size;
-float *precision;
+xdrf3dfcoord_ (int *xdrid, float *fp, int *size, float *precision, int *ret)
 {
 	*ret = xdr3dfcoord(xdridptr[*xdrid], fp, size, precision);
 }
 
 void
-xdrfstring_ (xdrid, sp_ptr, maxsize, ret, sp_len)
-int *xdrid, *ret;
-char * sp_ptr; int sp_len;
-int *maxsize;
+xdrfstring_ (int *xdrid, char *sp_ptr, int *maxsize, int *ret, int sp_len)
 {
 	char *tsp;
 
@@ -308,9 +293,7 @@ int *maxsize;
 }
 
 void
-xdrfwrapstring_ (xdrid,  sp_ptr, ret, sp_len)
-int *xdrid, *ret;
-char * sp_ptr; int sp_len;
+xdrfwrapstring_ (int *xdrid, char *sp_ptr, int *ret, int sp_len)
 {
 	char *tsp;
 	int maxsize;
@@ -332,36 +315,26 @@ char * sp_ptr; int sp_len;
 }
 
 void
-xdrfopaque_ (xdrid, cp, ccnt, ret)
-int *xdrid, *ret;
-caddr_t *cp;
-int *ccnt;
+xdrfopaque_ (int *xdrid, caddr_t *cp, int *ccnt, int *ret)
 {
 	*ret = xdr_opaque(xdridptr[*xdrid], (caddr_t)*cp, (u_int)*ccnt);
 	cnt += *ccnt;
 }
 
 void
-xdrfsetpos_ (xdrid, pos, ret)
-int *xdrid, *ret;
-int *pos;
+xdrfsetpos_ (int *xdrid, int *pos, int *ret)
 {
 	*ret = xdr_setpos(xdridptr[*xdrid], (u_int) *pos);
 }
 
 void
-xdrf_ (xdrid, pos)
-int *xdrid, *pos;
+xdrf_ (int *xdrid, int *pos)
 {
 	*pos = xdr_getpos(xdridptr[*xdrid]);
 }
 
 void
-xdrfvector_ (xdrid, cp, size, elproc, ret)
-int *xdrid, *ret;
-char *cp;
-int *size;
-xdrfproc_ elproc;
+xdrfvector_ (int *xdrid, char *cp, int *size, xdrfproc_ elproc, int *ret)
 {
 	int lcnt;
 	cnt = 0;
@@ -372,20 +345,14 @@ xdrfproc_ elproc;
 
 
 void
-xdrfclose_ (xdrid, ret)
-int *xdrid;
-int *ret;
+xdrfclose_ (int *xdrid, int *ret)
 {
 	*ret = xdrclose(xdridptr[*xdrid]);
 	cnt = 0;
 }
 
 void
-xdrfopen_ (xdrid,  fp_ptr, mode_ptr, ret, fp_len, mode_len)
-int *xdrid;
-char * fp_ptr; int fp_len;
-char * mode_ptr; int mode_len;
-int *ret;
+xdrfopen_ (int *xdrid, char *fp_ptr, char *mode_ptr, int *ret, int fp_len, int mode_len)
 {
 	char fname[512];
 	char fmode[3];
@@ -412,7 +379,7 @@ int *ret;
  | with some routines to assist in this task (those are marked
  | static and cannot be called from user programs)
 */
-#define MAXABS INT_MAX-2
+#define MAXABS ((double)(INT_MAX-2))
 
 #ifndef MIN
 #define MIN(x,y) ((x) < (y) ? (x):(y))

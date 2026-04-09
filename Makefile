@@ -4,7 +4,13 @@
 # Define ARCH to be one the of architectures found in the conf directory.
 # The names are the same as the ones used for compiling pvm, so you might
 # want to use the value of PVM_ARCH.
+# Auto-detect: macOS vs linux
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+ARCH	= darwin
+else
 ARCH	= linux
+endif
 
 # Set FORTRAN compiler and flags for ARCH
 

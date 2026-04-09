@@ -262,10 +262,10 @@ MIT License. See [LICENSE](LICENSE).
 * Tested so far only on macOS 12.2.1 but works. Will test on a Linuxbox when I'm back in US!
 
 ## Credits
-(c) 1995 Frans van Hoesel (original text and code)
+(C) 1995 Frans van Hoesel (original text and code - see `about.md` for more details on the original implementation.
 
-Updated by Alex Holehouse, 2014-2022
+Updated and maintained by [Alex Holehouse](https://holehouselab.com/), 2014-2026. 
 
-hoesel@chem.rug.nl
+hoesel@chem.rug.nl 
 
 alex.holehouse@wustl.edu 

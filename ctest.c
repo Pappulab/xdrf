@@ -1,3 +1,20 @@
+/*________________________________________________________________________
+ |
+ | ctest.c - Test program for the xdrf library (C interface).
+ |
+ | This program demonstrates and validates the xdr3dfcoord compression
+ | round-trip by:
+ |   1. Reading ASCII coordinate data from test.gmx
+ |   2. Writing compressed coordinates to test.xdr using xdr3dfcoord
+ |   3. Reading the compressed data back from test.xdr
+ |   4. Writing decompressed coordinates to test.out as ASCII
+ |   5. Comparing the original and decompressed data to verify
+ |      that the maximum difference is within precision bounds
+ |
+ | Expected output: "maxdiff = 0.000000"
+ |
+*/
+
 #include <limits.h>
 #include <math.h>
 #include <rpc/rpc.h>
@@ -11,14 +28,20 @@
 
 /*________________________________________________________________________
  |
- | read_frame - ad hoc implementation to read ascii data
+ | read_frame - Read one frame of ASCII coordinate data.
  |
- | given a open file handle and the number of coordinates, this routine
- | reads sets of three floating point numbers and stores the result in
- | coord. the coord array should be preallocated to hold 3 * num_of_coord
- | coordinates. Minval and maxval will return the minumum and maximum
- | values of the coordinates.
- | Return value will be -1 when eof is reached, and 0 on success
+ | Reads num_of_coord lines from the input file, each containing
+ | three floating-point numbers (x, y, z). The results are stored
+ | sequentially in the coord array (x0, y0, z0, x1, y1, z1, ...).
+ |
+ | Parameters:
+ |   in            - Open file handle positioned at the start of a frame.
+ |   num_of_coord  - Number of coordinate triples to read.
+ |   coord         - Pre-allocated float array of size 3 * num_of_coord.
+ |
+ | Returns: 0 on success, -1 on EOF (if no coordinates were read).
+ |          Exits on error if a partial frame is encountered.
+ |
 */
 
 static int read_frame(FILE *in, int num_of_coord, float coord[]) {
@@ -40,17 +63,16 @@ static int read_frame(FILE *in, int num_of_coord, float coord[]) {
 }
 
 
-
 int main() {
-    XDR xd, xd2;
+    XDR xd, xd2;           /* XDR stream handles for write and read */
     int i, j;
-    float prec = 1000.0;
-    float *coord, *coord2;
+    float prec = 1000.0;   /* Precision: 3 decimal places */
+    float *coord, *coord2; /* Original and decompressed coordinate arrays */
     int num_of_coord;
     char *line;
     int framecnt = 0;
     double maxdiff = 0;
-    float d0, d1, d2, d3;
+    float d0, d1, d2, d3;  /* Header values from the first line of test.gmx */
     FILE *fgmx, *fout;
     
     line = (char *) malloc(1024);
@@ -69,10 +91,12 @@ int main() {
     /* read first line which contains number of coordinates */
     sscanf(line," %d %f %f %f %f", &num_of_coord, &d0, &d1, &d2, &d3);
     
+    /* Allocate coordinate buffers for the number of atoms */
     coord = (float *)malloc(num_of_coord * 3 * sizeof(float));
     coord2 = (float *)malloc(num_of_coord * 3 * sizeof(float));
 
-    /* open xdr file to which compressed coordinates will be written */
+    /* ---- STEP 1: Compress ---- */
+    /* Open XDR file in append mode for writing compressed coordinates */
     if (xdropen(&xd, "test.xdr","a") == 0) {
 	fprintf(stderr,"failed to open file\n");
     }
@@ -83,7 +107,7 @@ int main() {
     xdr_float(&xd, &d1);
     xdr_float(&xd, &d2);
     xdr_float(&xd, &d3);
-    /* read all frames from the data and write compressed coordinates */
+    /* Read all frames from ASCII input; compress and write each one */
     while ( read_frame(fgmx, num_of_coord, coord) == 0 ) {
 	framecnt++;
 	if (xdr3dfcoord(&xd, coord, &num_of_coord, &prec) == 0) {
@@ -95,25 +119,28 @@ int main() {
     
     
     
-    /* Now do the inverse ! */
+    /* ---- STEP 2: Decompress ---- */
     
-    /* open file to write decompressed data */
+    /* Open output file for decompressed ASCII coordinates */
     fout = fopen("test.out", "w+");
     if (fout == NULL) {
 	perror("could not open test.out to write data\n");
 	exit(1);
     }
+    /* Open XDR file for reading */
     if (xdropen(&xd2, "test.xdr","r") == 0) {
 	fprintf(stderr,"error while opening test.xdr for read\n");
 	exit(1);
     }
     *line = '\0';
+    /* Read back header values */
     xdr_int(&xd2, &num_of_coord);
     xdr_float(&xd2, &d0);
     xdr_float(&xd2, &d1);
     xdr_float(&xd2, &d2);
     xdr_float(&xd2, &d3);
     fprintf(fout, "%5d%8.3f%8.3f%8.3f%8.3f\n", num_of_coord, d0, d1, d2, d3);
+    /* Decompress each frame and write as ASCII */
     for (i = 0; i < framecnt ; i++) {
 	if (xdr3dfcoord(&xd2, (float *)coord2, &num_of_coord, &prec) == 0) {
 	    fprintf(stderr, "error while reading coordinates\n");
@@ -128,7 +155,11 @@ int main() {
     
     
     
-    /* And compare the result */
+    /* ---- STEP 3: Verify round-trip ---- */
+    /* Compare original ASCII data with decompressed output.
+     * The maximum per-coordinate difference should be 0 (within
+     * the precision used for compression).
+     */
     
     fgmx = fopen("test.gmx", "r");
     fout = fopen("test.out", "r");

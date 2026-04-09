@@ -1,4 +1,6 @@
-Data Compression
+### Data Compression
+
+*Original forward by Frans van Hoesel* 
 
 When large systems are simulated over long times, enormous output files of
 Gigabyte sizes are produced. Using a large parallel machine for production
@@ -12,9 +14,7 @@ worked out under EUROPORT project. It is described in more detail below.
 The implementation is of general use for MD and will be made publicly
 available.
 
-
-Portable Data
-
+### Portable Data
 
 One requirement of EUROPORT is to write portable code that runs
 without modification on various types of parallel platforms.
@@ -73,7 +73,7 @@ files are added to the C versions of the XDR library. This
 Ensures that the Fortran library and the C library can share the
 same open file.
 
-Compressed Portable Data
+### Compressed Portable Data
 
 A further addition is a routine for writing compressed GROMOS
 coordinates. This routine is added because long runs on a fast
@@ -100,13 +100,15 @@ information, but this makes the routine complicated to use.
 The implementation of the routine is best explained starting with
 its function header:
 
- int xdr3dfcoord(XDR *xdrs, float *fp, int *size, float *precision)
+```
+int xdr3dfcoord(XDR *xdrs, float *fp, int *size, float *precision)
+```
 
 The first argument points to the data structure holding all
 relevant status information relating to the XDR stream (just like
 a file pointer holds the informatation on an open file). The
 second argument is a pointer to an array of floats. This array has
-size * 3 elements, which defines the function of the third
+size ` * 3` elements, which defines the function of the third
 parameter. The last parameter is a factor used in converting
 floating point numbers to integers. All elements in the array are
 multiplied with this factor and rounded to the nearest integer.
@@ -118,6 +120,9 @@ of the reduced number of bits needed to store the difference. The
 difference are combined into one big integer, saving even more
 bits. 
 
+
+
+```
 // This is best explaned with an example:
    Suppose dx, dy, dz are all less than 80, then writing these 
    separatly would require 3 times 7 bits or 21 bits. However
@@ -127,11 +132,13 @@ bits.
    values of dx, dy and dz. It is like writing the integer in a
    base 80 number system
 \\
+```
 
 Even when the difference is not small, compression can be
 achieved, because the routine first finds the minumum and maximum
 values for x, y and z. The coordinates are then written as
-   ( x * maxy + y) * maxz + z
+
+```( x * maxy + y) * maxz + z```
 
 Series of small differences are marked as such and only the
 number of coordinates in such a series is stored in the file, removing the need to
@@ -153,3 +160,7 @@ second coordinate of each run of small differences.
 
 This set of routines, including documentation, is available on
 request via the Web at URL: http://rugmd4.chem.rug.nl/hoesel/
+
+### Postscript
+
+As of 2026 the above URL is no longer functional, however, this repository maintains the reference library for the `xdrf` implementation and will be updated to maintain forwards and backwards compatiblity across archiectures as needed.

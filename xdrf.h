@@ -46,7 +46,11 @@ int xdropen(XDR *xdrs, const char *filename, const char *type);
  * Flushes XDR buffers, destroys the XDR stream, and closes the
  * underlying file descriptor. Do not call xdr_destroy separately.
  *
- * Returns: 1 on success, exits on error.
+ * If the library allocated the XDR struct (xdropen called with
+ * xdrs == NULL) it is freed here; otherwise the caller keeps ownership.
+ *
+ * Returns: 1 on success, 0 if xdrs is NULL or was not opened by
+ *          xdropen. Versions before 1.6 called exit(1) in those cases.
  */
 int xdrclose(XDR *xdrs) ;
 
@@ -63,12 +67,29 @@ int xdrclose(XDR *xdrs) ;
  *   xdrs      - XDR stream opened with xdropen.
  *   fp        - Array of 3 * (*size) floats (x,y,z triples).
  *   size      - On write: number of coordinate triples.
- *               On read: set to 0 to read whatever was written,
- *               or set to expected count for validation.
+ *               On read: the number of triples the frame is expected to
+ *               contain. A mismatch with the file is an error and the
+ *               call fails without touching fp. Set to 0 to accept
+ *               whatever count the file specifies -- but see the
+ *               warning below. On return it holds the actual count.
  *   precision - Multiplier for float-to-int conversion (e.g. 1000.0
- *               gives 3 decimal places of precision).
+ *               gives 3 decimal places of precision). On read it is
+ *               set to the value stored in the file, except for frames
+ *               of 9 or fewer atoms, which are stored uncompressed and
+ *               carry no precision field.
  *
  * Returns: 1 on success, 0 on failure.
+ *
+ * WARNING: with *size == 0 the library writes as many triples as the
+ * file asks for, and has no way to know how large fp is. Only use 0
+ * when you can bound the atom count independently -- for an untrusted
+ * or possibly corrupt file, read the count first (it is the first int
+ * of the frame) and size fp from it, or pass the count you expect.
+ * The C++ wrapper's read_3dfcoord() does the former for you.
+ *
+ * Malformed input is rejected rather than followed: the atom count,
+ * coordinate ranges, compression index, run lengths and compressed
+ * block size found in the file are all validated before use.
  */
 int xdr3dfcoord(XDR *xdrs, float *fp, int *size, float *precision) ;
 

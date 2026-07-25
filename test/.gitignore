@@ -1,1 +1,7 @@
-*xdr
+# Scratch files written by the tests
+*.xdr
+
+# Compiled test binaries
+test_xdrf
+test_xdrf_cpp
+test_fortran

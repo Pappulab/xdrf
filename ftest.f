@@ -4,9 +4,12 @@ c
 c     This program validates the xdrf Fortran wrappers by performing
 c     the same compress/decompress round-trip as ctest.c:
 c       1. Reads ASCII coordinate data from test.gmx
-c       2. Writes compressed coordinates to test.xdr via xdrf3dfcoord
-c       3. Reads the compressed data back from test.xdr
-c       4. Writes decompressed coordinates to test.out as ASCII
+c       2. Writes compressed coordinates to test_f.xdr via xdrf3dfcoord
+c       3. Reads the compressed data back from test_f.xdr
+c       4. Writes decompressed coordinates to test_f.out as ASCII
+c
+c     Its own file names keep it from colliding with ctest (test.xdr /
+c     test.out) and cxxtest (test_cpp.xdr / test_cpp.out).
 c
 c     If the round-trip succeeds, no output is printed (silent success).
 c     ================================================================
@@ -31,8 +34,16 @@ c     Open the ASCII coordinate file
 c     Read header line: number of coordinates and 4 float values
 	read(7, *) num_of_coord, d0, d1, d2, d3
 
-c     Open XDR file for writing (append mode)
-	call xdrfopen(xd, "test.xdr", "a", ret)
+c     The coordinate buffers are fixed size, so refuse data that would
+c     not fit rather than writing past the end of them
+	if (num_of_coord * 3 .gt. 10000) then
+	    write(*,*) 'ftest: test.gmx needs a buffer larger than 10000'
+	    stop 1
+	end if
+
+c     Open XDR file for writing. Mode "w", not "a": in append mode each
+c     run stacked another copy of the data onto the previous one.
+	call xdrfopen(xd, "test_f.xdr", "w", ret)
 	
 c     Write header values using standard XDR routines
 	call xdrfint(xd, num_of_coord, ret)
@@ -57,10 +68,10 @@ c     Read and compress each frame of coordinates
 c     --- STEP 2: Read compressed data and write decompressed ASCII ---
 
 c     Open output file for decompressed coordinates
-	open(8, file="test.out", status="unknown")
+	open(8, file="test_f.out", status="unknown")
 
 c     Open XDR file for reading
-	call xdrfopen(xd2, "test.xdr", "r", ret)
+	call xdrfopen(xd2, "test_f.xdr", "r", ret)
 
 c     Read back header values
 	call xdrfint(xd2, num_of_coord, ret)

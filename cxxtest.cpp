@@ -59,7 +59,9 @@ int main() {
     /* ---- STEP 1: Compress ---- */
     int framecnt = 0;
     {
-        xdrf::XdrFile out("test_cpp.xdr", "a");
+        /* "w", not "a": in append mode each run stacked another copy of
+         * the data onto the previous one and the file grew without bound. */
+        xdrf::XdrFile out("test_cpp.xdr", "w");
         out.write_int(num_of_coord);
         out.write_float(d0);
         out.write_float(d1);

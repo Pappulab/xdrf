@@ -61,7 +61,17 @@ SHELL	= /bin/sh
 RMCMD	= true
 
 M4 	= m4
-M4FILE	= conf/$(ARCH).m4
+
+# Resolve the m4 config for ARCH. Two naming families live in conf/: the
+# uppercase PVM_ARCH names (SUN4, RS6K, ALPHA, ...) and the lowercase short
+# codes (sun, sgi, linux, darwin, ...). Two names collided between the two
+# families case-insensitively -- SGI/sgi and CM5/cm5 -- which meant the
+# repository could not be checked out correctly on macOS or Windows, where
+# each pair is a single file. The uppercase duplicates were dropped (their
+# contents were identical to the lowercase ones), so fall back to the
+# lowercase spelling when an uppercase ARCH has no file of its own.
+ARCH_LC := $(shell echo $(ARCH) | tr 'A-Z' 'a-z')
+M4FILE	:= $(if $(wildcard conf/$(ARCH).m4),conf/$(ARCH).m4,conf/$(ARCH_LC).m4)
 
 LFOBS 	= libxdrf.o 
 LOBS	= xdr3dfcoord.o
@@ -83,6 +93,8 @@ cxxtest: cxxtest.cpp libxdrf.a xdrf.hpp
 
 clean:
 	rm -f $(LFOBS) $(LOBS) ftocstr.o libxdrf.a ftest ctest cxxtest
+	rm -f libxdrf.c
+	rm -f test.xdr test.out test_f.xdr test_f.out test_cpp.xdr test_cpp.out
 
 tidy:
 	rm -f $(LOBS) $(LFOBS)

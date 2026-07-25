@@ -80,7 +80,7 @@ int main() {
     /* open file containing 3d coordinates */
     fgmx = fopen("test.gmx","r");
     if (fgmx == NULL) {
-	perror("could open gmx test data");
+	perror("could not open gmx test data");
 	exit(1);
     }
     if (fgets(line, 1024 -1, fgmx) == NULL) {
@@ -96,9 +96,13 @@ int main() {
     coord2 = (float *)malloc(num_of_coord * 3 * sizeof(float));
 
     /* ---- STEP 1: Compress ---- */
-    /* Open XDR file in append mode for writing compressed coordinates */
-    if (xdropen(&xd, "test.xdr","a") == 0) {
-	fprintf(stderr,"failed to open file\n");
+    /* Open XDR file for writing compressed coordinates. Note "w", not "a":
+     * in append mode each run of the test stacked another copy of the data
+     * onto the previous one, so test.xdr grew without bound.
+     */
+    if (xdropen(&xd, "test.xdr","w") == 0) {
+	fprintf(stderr,"failed to open test.xdr for write\n");
+	exit(1);
     }
     
     /* just as test write the first line using normal xdr routine */
@@ -163,6 +167,10 @@ int main() {
     
     fgmx = fopen("test.gmx", "r");
     fout = fopen("test.out", "r");
+    if (fgmx == NULL || fout == NULL) {
+	perror("could not reopen data files for comparison");
+	exit(1);
+    }
     maxdiff = 0;
     fgets(line, 1024 -1, fgmx);
     fgets(line, 1024 -1, fout);
@@ -174,8 +182,10 @@ int main() {
 	    maxdiff = fabs(coord[j] - coord2[j]) ;
 	}
     }
-    fprintf(stderr,"\nmaxdiff  = %f\n", maxdiff);    
+    fprintf(stderr,"\nmaxdiff  = %f\n", maxdiff);
 
+    fclose(fgmx);
+    fclose(fout);
     free(coord);
     free(coord2);
     free(line);

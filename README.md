@@ -1,6 +1,6 @@
 # libxdrf
 
-###### Current version 1.4 (April 2026)
+###### Current version 1.6 (July 2026)
 
 A portable C/C++/Fortran library for reading and writing XDR (External Data Representation) data, with built-in lossy compression for 3D coordinates. Originally developed for the EUROPORT project by [Frans van Hoesel](https://site.acornatom.nl/atom_handleidingen/pcharme/fvh/frans.html), this version is maintained with bug fixes and modern compiler support.
 
@@ -76,6 +76,8 @@ make ARCH=linux
 
 The `conf/` directory contains m4 configuration files for many platforms. Each config defines how Fortran function names are mangled and how strings are passed across the C/Fortran boundary.
 
+Two naming families live side by side: the uppercase PVM\_ARCH names (`SUN4`, `RS6K`, `ALPHA`, …) and the lowercase short codes (`sun`, `sgi`, `linux`, `darwin`, …). If an uppercase `ARCH` has no config of its own, the build falls back to the lowercase spelling, so `make ARCH=SGI` and `make ARCH=sgi` both work.
+
 | Config file(s) | Platform | Name mangling |
 |---|---|---|
 | `linux.m4` | Linux (GNU/glibc) | `name_` |
@@ -127,7 +129,7 @@ For most modern systems, either `linux` or `darwin` is the correct choice and is
 ./cxxtest    # Should print "maxdiff = 0.000000"
 ```
 
-`ctest` and `cxxtest` read `test.gmx`, compress it to XDR, decompress, and verify the round-trip. `cxxtest` does the same thing as `ctest` but uses the C++ `xdrf::XdrFile` API.
+All three read `test.gmx`, compress it to XDR, decompress, and verify the round-trip; `ftest` and `cxxtest` do what `ctest` does through the Fortran and C++ interfaces respectively. Each writes to its own scratch files (`test.xdr`/`test.out`, `test_f.xdr`/`test_f.out`, `test_cpp.xdr`/`test_cpp.out`) so they can be run in any order. The three `.xdr` files should come out byte-identical, which is a useful check that the interfaces agree on the format. `make clean` removes them.
 
 ### Full test suite
 
@@ -137,7 +139,7 @@ The `test/` directory contains a comprehensive test suite covering the C, C++, a
 make -C test    # or: cd test && make test
 ```
 
-This runs 29 C tests, 24 C++ tests, and 15 Fortran tests covering XDR primitive round-trips (int, float, double, short, char, string, bool), `xdr3dfcoord` at various sizes and coordinate patterns, RAII and move semantics (C++), exception handling (C++), append mode, multi-file I/O, setpos/getpos, multi-frame trajectories, and compression ratio verification. See [test/README.md](test/README.md) for details.
+This runs 32 C tests, 24 C++ tests, and 15 Fortran tests covering XDR primitive round-trips (int, float, double, short, char, string, bool), `xdr3dfcoord` at various sizes and coordinate patterns, RAII and move semantics (C++), exception handling (C++), append mode, multi-file I/O, setpos/getpos, multi-frame trajectories, compression ratio verification, and rejection of malformed input. See [test/README.md](test/README.md) for details.
 
 ## C API
 
@@ -159,13 +161,37 @@ int xdrclose(XDR *xdrs);
 
 // Read/write compressed 3D coordinates.
 // fp:        array of 3*size floats
-// size:      number of atoms (read back on decode)
+// size:      number of atoms; on read, the count the frame is expected to
+//            hold (0 = accept whatever the file says). Set to the actual
+//            count on return.
 // precision: multiplier for float→fixed-point conversion (e.g. 1000.0)
 // Returns 1 on success, 0 on failure.
 int xdr3dfcoord(XDR *xdrs, float *fp, int *size, float *precision);
 ```
 
+`xdrclose` returns 1 on success and 0 if the stream is NULL or was not opened by `xdropen`. If the library allocated the `XDR` struct (`xdropen` called with `xdrs == NULL`, which is what the Fortran wrappers do) it is freed here; otherwise you keep ownership.
+
 Use standard XDR routines (`xdr_int`, `xdr_float`, `xdr_double`, etc.) for non-coordinate data.
+
+### Reading coordinates safely
+
+On read, `xdr3dfcoord` checks `*size` against the count stored in the file and fails without touching `fp` if they disagree. Passing `*size = 0` disables that check and lets the file decide how many triples to write into `fp` — and the library has no way to know how large `fp` is.
+
+Use 0 only when the atom count is bounded by other means. For a file you did not write yourself, read the count first (it is the first `int` of the frame) and size the buffer from it:
+
+```c
+unsigned int pos = xdr_getpos(&xd);
+int natoms = 0;
+xdr_int(&xd, &natoms);          /* the frame's atom count */
+xdr_setpos(&xd, pos);           /* rewind */
+
+float *coords = malloc(natoms * 3 * sizeof(float));
+xdr3dfcoord(&xd, coords, &natoms, &precision);
+```
+
+The C++ `read_3dfcoord()` does exactly this for you. Everything else the frame specifies — coordinate ranges, compression index, run lengths and the compressed block size — is validated by the library before use, so a corrupt file yields a `0` return rather than a crash.
+
+For frames of 9 atoms or fewer the coordinates are stored uncompressed and no precision value is written, so `*precision` is left untouched on read.
 
 ### Example (C)
 
@@ -316,13 +342,25 @@ All functions pass an integer `xdrid` (set by `xdrfopen`) to identify the open f
 | `xdrfint(xdrid, ip, ret)` | Read/write integer |
 | `xdrffloat(xdrid, fp, ret)` | Read/write float |
 | `xdrfdouble(xdrid, dp, ret)` | Read/write double |
-| `xdrfstring(xdrid, sp, maxsize, ret)` | Read/write string |
+| `xdrfstring(xdrid, sp, maxsize, ret)` | Read/write string, max length `maxsize` |
+| `xdrfwrapstring(xdrid, sp, ret)` | Read/write string, length inferred |
 | `xdrfbool(xdrid, bp, ret)` | Read/write boolean |
 | `xdrfchar(xdrid, cp, ret)` | Read/write character |
+| `xdrfuchar(xdrid, ucp, ret)` | Read/write unsigned character |
 | `xdrflong(xdrid, lp, ret)` | Read/write long |
+| `xdrfulong(xdrid, ulp, ret)` | Read/write unsigned long |
 | `xdrfshort(xdrid, sp, ret)` | Read/write short |
+| `xdrfushort(xdrid, usp, ret)` | Read/write unsigned short |
+| `xdrfopaque(xdrid, cp, ccnt, ret)` | Read/write `ccnt` bytes verbatim, no conversion |
+| `xdrfvector(xdrid, cp, size, xdrfproc, ret)` | Read/write an array via one of the routines above |
+| `xdrfsetpos(xdrid, pos, ret)` | Seek to a byte offset |
+| `xdrf(xdrid, pos)` | Return the current byte offset in `pos` |
 
-In all cases, `ret` is 1 on success and 0 on failure.
+In all cases, `ret` is 1 on success and 0 on failure. `xdrf` is the exception: it is named just `xdrf`, and takes no `ret`.
+
+`xdrfvector` takes the name of another routine (e.g. `xdrfdouble`) as `xdrfproc` and applies it to each of `size` elements; unlike the C version you do not pass an element size, and `xdrfstring` cannot be used this way. `xdrfopaque` copies bytes without byte swapping, so opaque data is only portable between machines that agree on its layout.
+
+For `xdrf3dfcoord` on read, `size` is the number of triplets the frame is expected to hold, and a disagreement with the file is an error. Passing 0 accepts whatever count the file specifies, which is only safe when `fp` is known to be large enough — see the warning in the [C API](#c-api) section.
 
 ## Linking with CAMPARI
 
@@ -335,6 +373,7 @@ libxdrf.m4    — Main library source (m4 template)
 xdrf.h        — C header
 xdrf.hpp      — C++ header-only wrapper (requires C++17)
 ftocstr.c     — Fortran-to-C string helpers
+xdrf.man      — Man page, section 3 (man ./xdrf.man)
 ctest.c       — C smoke test (3dfcoord round-trip)
 cxxtest.cpp   — C++ smoke test (same round-trip via XdrFile)
 ftest.f       — Fortran smoke test
@@ -342,8 +381,11 @@ test.gmx      — Test coordinate data
 Makefile      — Build script (auto-detects macOS/Linux)
 conf/         — m4 architecture configs (linux.m4, darwin.m4, ...)
 test/         — Comprehensive test suite (C, C++, and Fortran)
-Intro.txt     — Background on the compression algorithm
+about.md      — Background on the compression algorithm
+LICENSE       — MIT license
 ```
+
+`libxdrf.c` is generated from `libxdrf.m4` by the Makefile and is not source; `make clean` removes it.
 
 ## Related
 
@@ -358,6 +400,30 @@ If you run into problems, please open a GitHub issue. If you don't get a respons
 MIT License. See [LICENSE](LICENSE).
 
 ## Changelog
+
+#### V 1.6 (Jul 2026)
+
+Bug fixes, mostly memory safety. The on-disk format is unchanged: for real trajectory data this version and 1.5 produce byte-identical files and read each other's output identically. See the compatibility note at the end of this entry for the one degenerate case that behaves differently.
+
+* Fixed a crash when a caller-owned and a library-owned `XDR` struct were open at the same time. Ownership was recorded in a single shared slot that every `xdropen` overwrote, so it only ever described the most recently opened file: closing a C-opened file while a Fortran-opened one was open called `free()` on the caller's struct (an abort, if it was on the stack), and closing them in the other order leaked. Ownership is now tracked per file handle.
+* Fixed a heap buffer overflow in `xdrfstring`, which sized its scratch buffer from the Fortran string length but let `xdr_string` write up to `maxsize` bytes into it. `xdrfwrapstring` had the same bug off by one.
+* Hardened the `xdr3dfcoord` read path against malformed files. The atom count, coordinate ranges, compression index, run lengths and compressed block size were all used unvalidated; a corrupt file could index the `magicints` table out of bounds, divide by zero, or write past the end of both the internal and the caller's buffers. All are now checked and rejected with a `0` return.
+* A `size` that disagrees with the count in the file is now an error rather than a warning followed by decoding into the caller's undersized buffer.
+* Fixed an out-of-bounds read of `magicints[]` on the write path: several places clamped an index to the table's element count instead of the last valid index.
+* Fixed `xdrfshort` advancing the `xdrfvector` cursor by `sizeof(short *)` (8) rather than `sizeof(short)` (2), which misread every element after the first of a short array.
+* Fixed `xdrfopen` recording a string-conversion failure in `ret` and then overwriting it, silently opening a truncated filename.
+* Fixed C++ `read_3dfcoord()` allocating a fixed 30000-float buffer and then letting the file decide how much to write into it, overflowing for frames above 10000 atoms. It now reads the atom count from the frame and sizes the buffer to match.
+* `xdrclose` and `xdr3dfcoord` now return 0 on a bad handle instead of calling `exit(1)` and taking the calling program down with them.
+* Replaced `xdr_vector(..., (xdrproc_t)xdr_float)` with a direct loop; the cast called a two-argument function through a three-argument pointer type, which traps under UBSan and CFI.
+* Fixed undefined signed-integer overflow when reconstructing coordinates and coordinate ranges from file values, and an undefined `1 << 32` in `receivebits`.
+* `xdropen` now checks its `malloc`, and the coordinate buffers no longer leak when `realloc` fails.
+* `ctest`, `cxxtest` and `ftest` opened their output in append mode, so every run stacked another copy of the data onto the file. They now truncate, and `ftest` writes to `test_f.*` instead of colliding with `ctest`'s files.
+* `make clean` now removes generated `libxdrf.c` and the smoke-test scratch files.
+* Removed the two case-colliding config files, `conf/CM5.m4` and `conf/SGI.m4`. Git tracked them separately from `conf/cm5.m4` and `conf/sgi.m4`, but on macOS and Windows each pair is a single file, so the repository could not be checked out correctly there — two files always arrived with the wrong contents and showed as modified. The contents of each pair were identical, so nothing is lost, and the build now falls back to the lowercase spelling when an uppercase `ARCH` has no config of its own (`make ARCH=SGI` still works).
+* Stopped tracking build products that were committed to the repository: the generated `libxdrf.c`, the three compiled `test/test_*` binaries, and `test_cpp.xdr`. All are produced by `make` and are now in `.gitignore`.
+* Added regression tests for the above; documented the `size = 0` hazard in `xdrf.h`, the man page and this README; documented the six Fortran routines (`xdrfuchar`, `xdrfushort`, `xdrfulong`, `xdrfopaque`, `xdrfsetpos`, `xdrf`) that existed but appeared in neither.
+
+**Compatibility note.** The one behavioural difference from 1.5 is in the out-of-bounds regime described above. When the minimum Manhattan separation between consecutive atoms exceeded `magicints[64]` (2097152 scaled units), 1.5 selected a compression index of 73 and encoded the frame using the value one past the end of that 73-entry table — whatever happened to follow it in memory. Such a frame only decoded correctly when read by the same binary that wrote it, so 1.6 refuses it rather than guessing, and never writes one. Reaching this needs a minimum inter-atom separation of about 2097 nm at the conventional precision of 1000; real MD data sits around index 21, and everything below index 65 is byte-for-byte identical to 1.5.
 
 #### V 1.5 (Apr 2026)
 * Converted all K&R function definitions to ANSI C prototypes (C23 compatible) in `libxdrf.m4` and `ftocstr.c`.
@@ -380,12 +446,8 @@ MIT License. See [LICENSE](LICENSE).
 * Commented out the stub definition of `xdrstdio_create()` as this is now generally provided by `/usr/include/rpc/xdr.h` (part of `libtirpc-dev` / `libntirpc-dev`).
 
 #### V 1.3
-* Fixed memory leak in Fortran interface (xdridptr flag at index 20).
+* Fixed memory leak in Fortran interface (xdridptr flag at index 20). Superseded in 1.6 by per-handle ownership tracking.
 
-#### V 1.2
-* Memory error patch for CAMPARI compatibility.
-
-#### V 1.3
 * Thanks to @sodiumnitrate for identifying issue(s) with the current implementation, which hasn't been update in ~8 years!
 
 * Changed default compilers to `gcc` and `gfortran` - in general Intel compilers are superior for CAMPARI but it's often convenient to get things working in a GNU universe first
@@ -397,6 +459,9 @@ MIT License. See [LICENSE](LICENSE).
 * Added stub declaration for `xdrstdio_create()` in `xdrf.h` - implicit function declaration as no longer allowed
 
 * Tested so far only on macOS 12.2.1 but works. Will test on a Linuxbox when I'm back in US!
+
+#### V 1.2
+* Memory error patch for CAMPARI compatibility.
 
 ## Credits
 (C) 1995 Frans van Hoesel (original text and code - see `about.md` for more details on the original implementation.

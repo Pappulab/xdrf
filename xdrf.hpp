@@ -224,9 +224,13 @@ public:
     std::string read_string(unsigned int maxlen = 4096) {
         check_open();
         char *buf = nullptr;
-        if (!xdr_string(xdr_.get(), &buf, maxlen))
+        /* xdr_string allocates buf on decode; it can allocate and then
+         * fail, so release it on the error path too. */
+        if (!xdr_string(xdr_.get(), &buf, maxlen)) {
+            free(buf);
             throw std::runtime_error("xdr_string read failed");
-        std::string result(buf);
+        }
+        std::string result(buf ? buf : "");
         free(buf);
         return result;
     }
@@ -259,25 +263,29 @@ public:
     }
 
     /* Read compressed 3D coordinates.
-     * Returns a pair of (coords vector, precision used). */
+     * Returns a pair of (coords vector, precision used).
+     *
+     * The atom count is the first int of the frame, so it is read and the
+     * stream rewound before allocating. That way the buffer always matches
+     * what the file actually contains.
+     *
+     * This used to allocate a fixed 30000 floats and pass size = 0 ("accept
+     * whatever count is in the file"), which silently overflowed the buffer
+     * for any frame of more than 10000 atoms. */
     std::pair<std::vector<float>, float> read_3dfcoord() {
         check_open();
-        /* First pass: read size and precision by providing a large buffer.
-         * xdr3dfcoord reads the size from the stream. */
+
+        const unsigned int start = xdr_getpos(xdr_.get());
         int size = 0;
+        if (!xdr_int(xdr_.get(), &size))
+            throw std::runtime_error("xdr3dfcoord: could not read atom count");
+        if (!xdr_setpos(xdr_.get(), start))
+            throw std::runtime_error("xdr3dfcoord: stream is not seekable");
+        if (size < 0)
+            throw std::runtime_error("xdr3dfcoord: negative atom count in file");
+
+        std::vector<float> coords(static_cast<size_t>(size) * 3);
         float precision = 0;
-
-        /* We need to know the size before allocating. The xdr3dfcoord
-         * protocol writes the size first, so we read it, allocate,
-         * then read the data. Unfortunately the C API does both in one
-         * call, so we must over-allocate or use a two-step approach.
-         *
-         * The safe approach: allocate a reasonable buffer, let
-         * xdr3dfcoord fill size, and resize afterwards. We start with
-         * a generous initial allocation. */
-        std::vector<float> coords(30000); /* 10000 atoms */
-        size = 0; /* 0 = accept whatever count is in the file */
-
         if (!xdr3dfcoord(xdr_.get(), coords.data(), &size, &precision))
             throw std::runtime_error("xdr3dfcoord read failed");
 
@@ -286,9 +294,16 @@ public:
     }
 
     /* Read 3D coordinates into a caller-provided buffer.
-     * fp:        pre-allocated array (must hold at least 3*max_atoms floats).
-     * max_atoms: capacity; overwritten with actual atom count on return.
-     * precision: set on return to the precision stored in the file. */
+     * fp:        pre-allocated array holding at least 3*num_atoms floats.
+     * num_atoms: the atom count the frame is expected to contain, or 0 to
+     *            accept whatever the file says. This is a expectation, not
+     *            a capacity: with 0 the library cannot tell how large fp is,
+     *            so only use it when the count is known to be bounded.
+     *            Throws if a nonzero value disagrees with the file.
+     * precision: set on return to the precision stored in the file.
+     *
+     * Prefer the no-argument read_3dfcoord() overload, which sizes the
+     * buffer from the file itself and cannot be given a mismatched one. */
     void read_3dfcoord(float *fp, int &num_atoms, float &precision) {
         check_open();
         if (!xdr3dfcoord(xdr_.get(), fp, &num_atoms, &precision))

@@ -1107,6 +1107,172 @@ static int test_3dfcoord_with_metadata(void) {
 
 
 /* ================================================================
+ * TEST: mixing caller-owned and library-owned XDR structs
+ *
+ * xdropen(NULL, ...) makes the library allocate the XDR struct (the
+ * path the Fortran wrappers use); passing a struct makes the caller
+ * own it. Ownership used to be recorded in one shared slot that each
+ * open overwrote, so closing a caller-owned file while a library-owned
+ * one was open called free() on the caller's struct -- an abort when,
+ * as here, that struct is on the stack.
+ * ================================================================ */
+
+/* The Fortran wrapper, used here to close a library-owned handle by id.
+ * The trailing underscore matches conf/linux.m4 and conf/darwin.m4, the
+ * two configurations this test suite builds for. */
+extern void xdrfclose_(int *xdrid, int *ret);
+
+static int test_mixed_ownership_close_order(void) {
+    XDR c_xdr;
+    const char *fc = "tmp_test_own_c.xdr";
+    const char *ff = "tmp_test_own_f.xdr";
+    int fid, ret, v;
+
+    /* Caller-owned open, then library-owned open */
+    ASSERT_MSG(xdropen(&c_xdr, fc, "w") != 0, "caller-owned open should succeed");
+    fid = xdropen(NULL, ff, "w");
+    ASSERT_MSG(fid != 0, "library-owned open should succeed");
+
+    v = 1;
+    xdr_int(&c_xdr, &v);
+
+    /* Close the caller-owned one first: must not free the caller's struct */
+    ASSERT_INT_EQ(xdrclose(&c_xdr), 1);
+    ret = 0; xdrfclose_(&fid, &ret);
+    ASSERT_INT_EQ(ret, 1);
+
+    /* Now the other order: library-owned opened first */
+    fid = xdropen(NULL, ff, "w");
+    ASSERT_MSG(fid != 0, "library-owned open should succeed");
+    ASSERT_MSG(xdropen(&c_xdr, fc, "w") != 0, "caller-owned open should succeed");
+    ret = 0; xdrfclose_(&fid, &ret);
+    ASSERT_INT_EQ(ret, 1);
+    ASSERT_INT_EQ(xdrclose(&c_xdr), 1);
+
+    cleanup(fc);
+    cleanup(ff);
+    return 0;
+}
+
+/* ================================================================
+ * TEST: a size that disagrees with the file is refused
+ *
+ * fp is only guaranteed to hold the caller's stated number of
+ * triples, so decoding a different count would run off its end.
+ * This used to print a warning and then do it anyway.
+ * ================================================================ */
+
+static int test_3dfcoord_size_mismatch_refused(void) {
+    XDR xd;
+    const char *f = "tmp_test_mismatch.xdr";
+    float coords[60], back[60];
+    int n = 20, i, rc;
+    float prec = 1000.0f;
+
+    for (i = 0; i < 60; i++) coords[i] = (float)i * 0.01f;
+    xdropen(&xd, f, "w");
+    xdr3dfcoord(&xd, coords, &n, &prec);
+    xdrclose(&xd);
+
+    xdropen(&xd, f, "r");
+    n = 15;  /* deliberately wrong: the file holds 20 */
+    rc = xdr3dfcoord(&xd, back, &n, &prec);
+    ASSERT_INT_EQ(rc, 0);
+    xdrclose(&xd);
+
+    cleanup(f);
+    return 0;
+}
+
+/* ================================================================
+ * TEST: corrupt frames are rejected rather than followed
+ *
+ * Each field below indexes or sizes something, and each used to be
+ * trusted straight out of the file: smallidx indexed magicints[] out
+ * of bounds, an inverted min/max gave a zero divisor in receiveints(),
+ * and an oversized byte count overran the decode buffer.
+ * ================================================================ */
+
+static int write_reference_frame(const char *path, int natoms) {
+    XDR xd;
+    float *coords = (float *)malloc(natoms * 3 * sizeof(float));
+    float prec = 1000.0f;
+    int i, n = natoms;
+
+    for (i = 0; i < natoms * 3; i++) coords[i] = (float)(i % 97) * 0.013f;
+    xdropen(&xd, path, "w");
+    xdr3dfcoord(&xd, coords, &n, &prec);
+    xdrclose(&xd);
+    free(coords);
+    return 0;
+}
+
+/* Overwrite the big-endian int at byte offset 'off' */
+static void patch_be32(const char *path, long off, unsigned int val) {
+    FILE *f = fopen(path, "r+b");
+    unsigned char b[4];
+    b[0] = (unsigned char)(val >> 24); b[1] = (unsigned char)(val >> 16);
+    b[2] = (unsigned char)(val >> 8);  b[3] = (unsigned char)val;
+    fseek(f, off, SEEK_SET);
+    fwrite(b, 1, 4, f);
+    fclose(f);
+}
+
+static int read_back_expect_failure(const char *path, int natoms) {
+    XDR xd;
+    float *back = (float *)malloc(natoms * 3 * sizeof(float));
+    float prec = 0;
+    int n = natoms, rc;
+
+    xdropen(&xd, path, "r");
+    rc = xdr3dfcoord(&xd, back, &n, &prec);
+    xdrclose(&xd);
+    free(back);
+    return rc;
+}
+
+static int test_3dfcoord_rejects_corrupt_frames(void) {
+    const char *f = "tmp_test_corrupt.xdr";
+    const int natoms = 50;
+
+    /* Frame layout: size, precision, minint[3], maxint[3], smallidx, nbytes */
+    const long off_minint0  = 8;
+    const long off_maxint0  = 20;
+    const long off_smallidx = 32;
+    const long off_nbytes   = 36;
+
+    /* smallidx far past the end of magicints[] */
+    write_reference_frame(f, natoms);
+    patch_be32(f, off_smallidx, 100000u);
+    ASSERT_INT_EQ(read_back_expect_failure(f, natoms), 0);
+
+    /* smallidx below the first usable entry */
+    write_reference_frame(f, natoms);
+    patch_be32(f, off_smallidx, 0u);
+    ASSERT_INT_EQ(read_back_expect_failure(f, natoms), 0);
+
+    /* max below min -> zero axis range -> division by zero in receiveints */
+    write_reference_frame(f, natoms);
+    patch_be32(f, off_minint0, 1000u);
+    patch_be32(f, off_maxint0, 10u);
+    ASSERT_INT_EQ(read_back_expect_failure(f, natoms), 0);
+
+    /* compressed block far larger than the buffer for this atom count */
+    write_reference_frame(f, natoms);
+    patch_be32(f, off_nbytes, 0x00ffffffu);
+    ASSERT_INT_EQ(read_back_expect_failure(f, natoms), 0);
+
+    /* a negative atom count */
+    write_reference_frame(f, natoms);
+    patch_be32(f, 0, 0xfffffff0u);
+    ASSERT_INT_EQ(read_back_expect_failure(f, natoms), 0);
+
+    cleanup(f);
+    return 0;
+}
+
+
+/* ================================================================
  * MAIN
  * ================================================================ */
 
@@ -1149,6 +1315,11 @@ int main(void) {
     RUN_TEST(test_multiple_frames);
     RUN_TEST(test_3dfcoord_with_metadata);
     RUN_TEST(test_compression_ratio);
+
+    fprintf(stderr, "\n--- Robustness (regressions) ---\n");
+    RUN_TEST(test_mixed_ownership_close_order);
+    RUN_TEST(test_3dfcoord_size_mismatch_refused);
+    RUN_TEST(test_3dfcoord_rejects_corrupt_frames);
 
     fprintf(stderr, "\n=== Results: %d passed, %d failed, %d total ===\n\n",
             tests_passed, tests_failed, tests_run);

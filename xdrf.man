@@ -44,6 +44,11 @@ comes with the standard xdr library.
 Flush the data to the file, and close the file;
 You should not use xdr_destroy (which comes standard
 with the xdr libraries).
+.br
+If the library allocated the XDR struct (\fIxdrs\fR was NULL in the
+call to xdropen) it is freed here; otherwise the caller keeps
+ownership. Returns 1 on success and 0 if \fIxdrs\fR is NULL or was
+not opened by xdropen. Versions before 1.6 called exit(1) instead.
  
 .SS "int xdr3dfcoord(XDR *xdrs, float *fp, int *size, float *precision)"
 This is \fInot\fR a standard xdr routine. I named it this 
@@ -65,7 +70,20 @@ coordinates to read/write.
 .br
 \fI*size\fR should be the number of coordinate triplets. On read
 from a file it can either be zero, or it should match the
-number used while writing.
+number used while writing; a mismatch is an error and the call
+fails without touching \fIfp\fR. On return \fI*size\fR holds the
+count actually read.
+.br
+Beware that with \fI*size\fR set to zero the routine writes as many
+triplets as the file asks for and cannot tell how large \fIfp\fR is.
+Use zero only when the count is bounded by other means; for an
+untrusted file, read the count first (it is the first integer of the
+frame) and size \fIfp\fR from it.
+.br
+\fI*precision\fR is set on read to the value stored in the file, except
+for frames of nine or fewer triplets, which are stored uncompressed
+and carry no precision field.
+.br
 \fIfp\fR points to the coordinates which are stored in
 the order x0, y0, z0, x1, y1, z1, etc.
 
@@ -169,6 +187,9 @@ This routine has a possible portablility problem due to
 .br
 .B integer *2 sp
 .br
+.B integer ret
+.br
+Read/write a short integer.
 
 .SS "xdrfstring(xdrid, sp, maxsize, ret)"
 .B integer xdrid
@@ -212,6 +233,66 @@ In contrast with the C version you don't need to specify
 the byte size of an element.
 xdrfstring is not allowed here (it is in the C version).
 
+.SS "xdrfuchar(xdrid, ucp, ret)"
+.B integer xdrid
+.br
+.B character ucp
+.br
+.B integer ret
+.br
+Read/write an unsigned character.
+
+.SS "xdrfushort(xdrid, usp, ret)"
+.B integer xdrid
+.br
+.B integer *2 usp
+.br
+.B integer ret
+.br
+Read/write an unsigned short integer.
+
+.SS "xdrfulong(xdrid, ulp, ret)"
+.B integer xdrid
+.br
+.B integer ulp
+.br
+.B integer ret
+.br
+Read/write an unsigned long integer. Has the same 64 bit portability
+caveat as xdrflong.
+
+.SS "xdrfopaque(xdrid, cp, ccnt, ret)"
+.B integer xdrid
+.br
+.B character *(*) cp
+.br
+.B integer ccnt
+.br
+.B integer ret
+.br
+Read/write \fIccnt\fR bytes of untyped data verbatim, with no
+conversion of any kind. Because nothing is byte swapped, opaque data
+is only portable between machines that agree on its layout.
+
+.SS "xdrfsetpos(xdrid, pos, ret)"
+.B integer xdrid
+.br
+.B integer pos
+.br
+.B integer ret
+.br
+Seek to byte offset \fIpos\fR in the stream, as previously reported by
+xdrf. \fIret\fR is zero if the stream does not support seeking.
+
+.SS "xdrf(xdrid, pos)"
+.B integer xdrid
+.br
+.B integer pos
+.br
+Return the current byte offset in the stream in \fIpos\fR, for later
+use with xdrfsetpos. Note that this routine is named just "xdrf" and,
+unlike the others, takes no \fIret\fR argument.
+
 .SS "xdrf3dfcoord(xdrid, fp, size, precision, ret)"
 .B integer xdrid
 .br
@@ -243,7 +324,10 @@ number of coordinates to read/write.
 .br
 \fISize\fR should be the number of coordinate triplets. On read
 from a file it can either be zero, or it should match the
-number used while writing.
+number used while writing; a mismatch is an error and \fIret\fR
+comes back zero. Passing zero accepts whatever count the file
+specifies, which is only safe when \fIfp\fR is known to be large
+enough for it.
 .br
 \fIfp\fR is the array holding the cordinates in the order
 x1, y1, z1, x2, y2, z2, etc
